@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify CPU selection and real Dragonfly operations under emulated CPUs."""
 
+import json
 import os
 from pathlib import Path
 import socket
@@ -56,7 +57,7 @@ def run_server(cpu, mode, directory, restore=False):
         process = subprocess.Popen(
             ["qemu-x86_64", "-cpu", cpu, binary, "--logtostderr",
              "--bind=127.0.0.1", "--port=16379", "--proactor_threads=1",
-             "--maxmemory=256mb", f"--dir={directory}", "--dbfilename=smoke",
+             "--maxmemory=256mb", "--cache_mode=true", f"--dir={directory}", "--dbfilename=smoke",
              "--snapshot_cron="],
             stdout=log, stderr=log,
         )
@@ -78,7 +79,7 @@ def run_server(cpu, mode, directory, restore=False):
                 assert command("GET", "persist") == "cross-build"
                 assert command("HGET", "hash", "field") == "value"
                 assert command("LRANGE", "queue", 0, -1) == ["job1", "job2"]
-                assert command("JSON.GET", "json", ".") == '{"answer":42}'
+                assert json.loads(command("JSON.GET", "json", ".")) == {"answer": 42}
             else:
                 assert command("SET", "persist", "cross-build") == "OK"
                 assert command("HSET", "hash", "field", "value") == 1
@@ -86,6 +87,7 @@ def run_server(cpu, mode, directory, restore=False):
                 assert command("SADD", "set", "one", "two") == 2
                 assert command("ZADD", "scores", 1, "one") == 1
                 assert command("JSON.SET", "json", ".", '{"answer":42}') == "OK"
+                assert command("EVAL", "return redis.call('GET', KEYS[1])", 1, "persist") == "cross-build"
                 # Repeated writes exercise more paths than an idle PING probe.
                 for index in range(300):
                     assert command("SET", f"cache:{index}", "x" * 1024, "EX", 60) == "OK"
