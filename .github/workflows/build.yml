@@ -27,6 +27,15 @@ jobs:
         run: |
           shellcheck dragonfly.sh
           gcc -O2 -Wall -Wextra -Werror -march=x86-64 cpu-mode.c -o /tmp/dragonfly-cpu-mode
+      - name: Build both CPU variants and save resumable cache
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=dragonfly
+          cache-to: type=gha,scope=dragonfly,mode=max
       - name: Test both CPU builds before publishing
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
         with:
