@@ -54,9 +54,10 @@ def command(*parts):
 
 def run_server(cpu, mode, directory, restore=False):
     binary = f"/usr/local/lib/dragonfly/dragonfly-{mode}"
+    prefix = ["qemu-x86_64", "-cpu", cpu] if cpu else []
     with tempfile.TemporaryFile(mode="w+") as log:
         process = subprocess.Popen(
-            ["qemu-x86_64", "-cpu", cpu, binary, "--logtostderr",
+            [*prefix, binary, "--logtostderr",
              "--bind=127.0.0.1", "--port=16379", "--proactor_threads=1",
              "--maxmemory=256mb", "--cache_mode=true", f"--dir={directory}", "--dbfilename=smoke",
              "--snapshot_cron="],
@@ -97,6 +98,7 @@ def run_server(cpu, mode, directory, restore=False):
                 assert command("SAVE") == "OK"
                 assert list(Path(directory).glob("smoke*")), "Missing snapshot"
             assert command("PING") == "PONG"
+            print(f"Operations passed: CPU={cpu or 'native'}, build={mode}, restore={restore}", flush=True)
         except Exception:
             # Let a failing child finish writing its signal/exit diagnostics.
             try:
@@ -153,6 +155,13 @@ def main():
                             env={**os.environ, "DRAGONFLY_CPU_MODE": "invalid"},
                             capture_output=True, text=True)
     assert result.returncode != 0
+
+    # Separate native build failures from user-mode emulator failures.
+    for mode in ["generic", "avx2"]:
+        if mode == "avx2" and detected != "avx2":
+            continue
+        with tempfile.TemporaryDirectory() as directory:
+            run_server(None, mode, directory)
 
     # A snapshot written on one CPU must remain usable after rescheduling to another.
     with tempfile.TemporaryDirectory() as directory:
