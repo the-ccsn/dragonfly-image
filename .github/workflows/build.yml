@@ -1,0 +1,75 @@
+name: Build and publish Dragonfly
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dragonfly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+      - name: Validate selector source
+        run: |
+          shellcheck dragonfly.sh
+          gcc -O2 -Wall -Wextra -Werror -march=x86-64 cpu-mode.c -o /tmp/dragonfly-cpu-mode
+      - name: Test both CPU builds before publishing
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+        with:
+          context: .
+          target: test
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=dragonfly
+          cache-to: type=gha,scope=dragonfly,mode=max
+      - name: Resolve release tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^ARG DRAGONFLY_VERSION=//p' Dockerfile | head -1)
+          echo "image=ghcr.io/the-ccsn/dragonfly" >> "$GITHUB_OUTPUT"
+          echo "version_tag=${version}-auto-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish tested runtime image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        id: publish
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.image }}:${{ steps.tags.outputs.version_tag }}
+            ${{ steps.tags.outputs.image }}:${{ steps.tags.outputs.sha_tag }}
+          cache-from: type=gha,scope=dragonfly
+      - name: Record published image
+        if: steps.publish.outcome == 'success'
+        env:
+          IMAGE: ${{ steps.tags.outputs.image }}
+          TAG: ${{ steps.tags.outputs.version_tag }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: echo "Published \`$IMAGE:$TAG@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+
