@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify CPU selection and real Dragonfly operations under emulated CPUs."""
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -10,9 +11,9 @@ import tempfile
 import time
 
 
-def probe(cpu):
+def probe(cpu, helper):
     return subprocess.check_output(
-        ["qemu-x86_64", "-cpu", cpu, "/usr/local/bin/dragonfly-cpu-mode"],
+        ["qemu-x86_64", "-cpu", cpu, helper],
         text=True,
     ).strip()
 
@@ -109,6 +110,10 @@ def run_server(cpu, mode, directory, restore=False):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--selector-only", action="store_true")
+    parser.add_argument("--cpu-helper", default="/usr/local/bin/dragonfly-cpu-mode")
+    arguments = parser.parse_args()
     for cpu, expected in [
         ("Nehalem", "generic"),
         ("SandyBridge", "generic"),
@@ -119,8 +124,11 @@ def main():
         ("Haswell,-bmi2", "generic"),
         ("Haswell,-xsave", "generic"),
     ]:
-        assert probe(cpu) == expected, f"Incorrect selection for {cpu}"
+        assert probe(cpu, arguments.cpu_helper) == expected, f"Incorrect selection for {cpu}"
         print(f"CPU selection: {cpu} -> {expected}", flush=True)
+
+    if arguments.selector_only:
+        return
 
     # Verify the actual launcher preserves arguments and rejects invalid overrides.
     for mode in ["auto", "generic", "avx2"]:

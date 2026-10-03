@@ -6,6 +6,7 @@ check:
     shellcheck dragonfly.sh
     actionlint
     gcc -O2 -Wall -Wextra -Werror -march=x86-64 cpu-mode.c -o .tmp/dragonfly-cpu-mode
+    python3 scripts/test-image.py --selector-only --cpu-helper .tmp/dragonfly-cpu-mode
 
 test-image:
     docker build --target test -t dragonfly-auto-test .
