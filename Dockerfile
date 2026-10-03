@@ -16,6 +16,15 @@ RUN make configure RELEASE_DIR=build-generic \
       HELIO_MARCH_OPT="-march=x86-64 -mtune=generic" WITH_SIMSIMD=OFF \
     && cmake --build build-generic --target dragonfly --parallel "$BUILD_JOBS" \
     && strip --strip-debug build-generic/dragonfly
+# Lua's independent Makefile defaults to Sandy Bridge and ignores HELIO_MARCH_OPT.
+# Rebuild every Lua object, install its archive, and relink the baseline binary.
+RUN cd build-generic/third_party/lua \
+    && touch ./*.c \
+    && make all OPTFLAGS="-march=x86-64 -mtune=generic" \
+    && cp liblua.a /src/build-generic/third_party/libs/lua/lib/liblua.a \
+    && cd /src \
+    && cmake --build build-generic --target dragonfly --parallel "$BUILD_JOBS" \
+    && strip --strip-debug build-generic/dragonfly
 COPY cpu-mode.c /tmp/cpu-mode.c
 RUN gcc -O2 -Wall -Wextra -Werror -march=x86-64 -mtune=generic \
       /tmp/cpu-mode.c -o /tmp/dragonfly-cpu-mode

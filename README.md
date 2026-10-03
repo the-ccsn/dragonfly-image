@@ -10,7 +10,9 @@ starts:
 | Older x86-64 CPUs, including Xeon E5520 (Nehalem) | Generic, without AVX |
 
 The generic build uses `-march=x86-64 -mtune=generic` and disables optional
-SimSIMD. The optimized build uses `-march=x86-64-v3 -mtune=generic`. This is a
+SimSIMD. Lua has its own Makefile with a Sandy Bridge default; the generic stage
+rebuilds every Lua object with baseline flags and relinks Dragonfly.
+The optimized build uses `-march=x86-64-v3 -mtune=generic`. This is a
 custom compatibility build, not an upstream hardware support guarantee.
 Both builds retain the same Redis API, authentication, and snapshot format.
 
