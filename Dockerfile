@@ -51,10 +51,16 @@ HEALTHCHECK CMD /usr/local/bin/healthcheck.sh
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["dragonfly", "--logtostderr"]
 
-# The production image does not contain QEMU or test tooling.
+# QEMU 7.2+ can emulate AVX2; Ubuntu 22.04's QEMU 6.2 cannot.
+FROM ubuntu:24.04 AS emulator
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends qemu-user-static
+
+# Test the production libraries with a newer statically linked emulator.
 FROM runtime AS test
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends qemu-user python3
+    && apt-get install -y --no-install-recommends python3
+COPY --from=emulator /usr/bin/qemu-x86_64-static /usr/local/bin/qemu-x86_64
 COPY scripts/test-image.py /tests/test-image.py
 RUN python3 /tests/test-image.py
