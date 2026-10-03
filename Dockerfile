@@ -60,16 +60,16 @@ HEALTHCHECK CMD /usr/local/bin/healthcheck.sh
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["dragonfly", "--logtostderr"]
 
-# Pin a recent static user-mode emulator without changing production libraries.
-FROM ubuntu:22.04 AS emulator
-ADD --checksum=sha256:8e7d8f4c0c7809fc3fea0085199fd6b16f671e7c73d9bf6bec711e1cb535920a https://github.com/tonistiigi/binfmt/releases/download/deploy/v10.2.3-68/qemu_v10.2.3_linux-amd64.tar.gz /tmp/qemu.tar.gz
-RUN tar -xzf /tmp/qemu.tar.gz -C /usr/local/bin qemu-x86_64
+# QEMU 7.2+ can emulate AVX2; Ubuntu 22.04's QEMU 6.2 cannot.
+FROM ubuntu:24.04 AS emulator
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends qemu-user-static
 
 # Test the production libraries with a newer statically linked emulator.
 FROM runtime AS test
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3
-COPY --from=emulator /usr/local/bin/qemu-x86_64 /usr/local/bin/qemu-x86_64
+COPY --from=emulator /usr/bin/qemu-x86_64-static /usr/local/bin/qemu-x86_64
 COPY scripts/test-image.py /tests/test-image.py
 RUN python3 /tests/test-image.py
