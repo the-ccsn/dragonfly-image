@@ -88,6 +88,7 @@ def run_server(cpu, mode, directory, restore=False):
                 assert command("SADD", "set", "one", "two") == 2
                 assert command("ZADD", "scores", 1, "one") == 1
                 assert command("JSON.SET", "json", ".", '{"answer":42}') == "OK"
+                assert command("EVAL", "return 42", 0) == 42
                 assert command("EVAL", "return redis.call('GET', KEYS[1])", 1, "persist") == "cross-build"
                 # Repeated writes exercise more paths than an idle PING probe.
                 for index in range(300):
@@ -97,6 +98,12 @@ def run_server(cpu, mode, directory, restore=False):
                 assert list(Path(directory).glob("smoke*")), "Missing snapshot"
             assert command("PING") == "PONG"
         except Exception:
+            # Let a failing child finish writing its signal/exit diagnostics.
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+            print(f"Server failure: CPU={cpu}, build={mode}, exit={process.poll()}", flush=True)
             log.seek(0)
             print(log.read(), flush=True)
             raise
